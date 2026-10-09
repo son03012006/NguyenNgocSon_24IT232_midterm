@@ -1,20 +1,18 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -Werror -Iinclude
-LIBS = -lutil
-TARGET = my_ls
-
-SRCS = $(wildcard src/*.c)
+C = gcc
+CFLAGS = -Wall -Wextra -Werror -Iinclude -std=c99
+SRCS = src/entry.c src/options.c src/list.c src/utils.c src/sort.c src/format.c src/print.c src/main.c
 OBJS = $(SRCS:.c=.o)
+TARGET = my_ls
 
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $(OBJS)
 
-src/%.o: src/%.c
+%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f src/*.o $(TARGET)
+	rm -f $(OBJS) $(TARGET)
 
 .PHONY: all clean

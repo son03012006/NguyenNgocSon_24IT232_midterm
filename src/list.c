@@ -15,7 +15,7 @@ void list_init(EntryList *list) {
     list->capacity = 0;
 }
 
-// Them phan tu vao danh sach
+// Them Entry vao danh sach, tu tang dung luong neu can
 void list_add(EntryList *list, Entry *entry) {
     if (list->count >= list->capacity) {
         size_t new_capacity =
@@ -30,7 +30,7 @@ void list_add(EntryList *list, Entry *entry) {
     list->entries[list->count++] = entry;
 }
 
-// Giai phong bo nho danh sach
+// Giai phong cac Entry va mang con tro
 void list_free(EntryList *list) {
     if (list == NULL) return;
 
@@ -44,7 +44,7 @@ void list_free(EntryList *list) {
     list->capacity = 0;
 }
 
-// Doc cac muc trong thu muc
+// Doc cac muc trong thu muc va loc file an
 int list_read_dir(EntryList *list, const char *dirpath,
                   const Options *opts) {
     DIR *dir = opendir(dirpath);
@@ -57,7 +57,7 @@ int list_read_dir(EntryList *list, const char *dirpath,
     struct dirent *dp;
     int read_error = 0;
 
-    // Doc tung muc trong thu muc
+    // Doc tung muc cho den khi het du lieu hoac gap loi
     while (1) {
         errno = 0;
         dp = readdir(dir);
@@ -69,7 +69,7 @@ int list_read_dir(EntryList *list, const char *dirpath,
 
         const char *name = dp->d_name;
 
-        // Loc file an theo -a va -A
+        // -a hien thi tat ca, -A bo qua . va ..
         if (!opts->show_all) {
             if (opts->show_almost_all) {
                 if (strcmp(name, ".") == 0 ||
@@ -85,9 +85,11 @@ int list_read_dir(EntryList *list, const char *dirpath,
         list_add(list, entry);
     }
 
-    closedir(dir);
+    // Ghi nhan loi dong thu muc neu chua co loi doc
+    if (closedir(dir) == -1 && read_error == 0) {
+        read_error = errno;
+    }
 
-    // Bao loi neu qua trinh doc thu muc that bai
     if (read_error != 0) {
         fprintf(stderr, "ls: %s: %s\n",
                 dirpath, strerror(read_error));
@@ -96,80 +98,5 @@ int list_read_dir(EntryList *list, const char *dirpath,
 
     return 0;
 }
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <dirent.h>
-#include "list.h"
-#include "utils.h"
 
-// Khoi tao danh sach
-void list_init(EntryList *list) {
-    list->entries = NULL;
-    list->count = 0;
-    list->capacity = 0;
-}
-
-// Them Entry vao danh sach
-void list_add(EntryList *list, Entry *entry) {
-    if (list->count >= list->capacity) {
-        size_t new_capacity = list->capacity == 0
-                            ? 16 : list->capacity * 2;
-        list->entries = xrealloc(
-            list->entries, new_capacity * sizeof(Entry *)
-        );
-        list->capacity = new_capacity;
-    }
-
-    list->entries[list->count++] = entry;
-}
-
-// Giai phong danh sach
-void list_free(EntryList *list) {
-    if (list == NULL) {
-        return;
-    }
-
-    for (size_t i = 0; i < list->count; i++) {
-        entry_free(list->entries[i]);
-    }
-
-    free(list->entries);
-    list->entries = NULL;
-    list->count = 0;
-    list->capacity = 0;
-}
-
-// Doc noi dung thu muc
-void list_read_dir(EntryList *list, const char *dirpath,
-                   const Options *opts) {
-    DIR *dir = opendir(dirpath);
-    if (dir == NULL) {
-        perror(dirpath);
-        return;
-    }
-
-    struct dirent *dp;
-
-    while ((dp = readdir(dir)) != NULL) {
-        const char *name = dp->d_name;
-
-        // Loc file an theo -a va -A
-        if (opts->show_all == 0) {
-            if (opts->show_almost_all) {
-                if (strcmp(name, ".") == 0 ||
-                    strcmp(name, "..") == 0) {
-                    continue;
-                }
-            } else if (name[0] == '.') {
-                continue;
-            }
-        }
-
-        Entry *entry = entry_create(dirpath, name);
-        list_add(list, entry);
-    }
-
-    closedir(dir);
-}
 
