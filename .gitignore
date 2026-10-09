@@ -1,0 +1,4 @@
+src/*.o
+my_ls
+.DS_Store
+*.swp
