@@ -6,8 +6,9 @@
 #include <sys/stat.h>
 #include "format.h"
 
-// Dinh dang loai file va quyen truy cap
+// Chuyen quyen va loai file thanh chuoi 10 ky tu
 void format_mode(mode_t mode, char *str) {
+    // Xac dinh loai file
     if (S_ISDIR(mode)) str[0] = 'd';
     else if (S_ISLNK(mode)) str[0] = 'l';
     else if (S_ISCHR(mode)) str[0] = 'c';
@@ -16,75 +17,90 @@ void format_mode(mode_t mode, char *str) {
     else if (S_ISSOCK(mode)) str[0] = 's';
     else str[0] = '-';
 
+    // Quyen doc va ghi cua chu so huu
     str[1] = (mode & S_IRUSR) ? 'r' : '-';
     str[2] = (mode & S_IWUSR) ? 'w' : '-';
 
-    if (mode & S_ISUID)
-        str[3] = (mode & S_IXUSR) ? 's' : 'S';
-    else
-        str[3] = (mode & S_IXUSR) ? 'x' : '-';
+    // Xu ly quyen SUID va quyen thuc thi cua chu so huu
+    if (mode & S_ISUID) str[3] = (mode & S_IXUSR) ? 's' : 'S';
+    else str[3] = (mode & S_IXUSR) ? 'x' : '-';
 
+    // Quyen doc va ghi cua nhom
     str[4] = (mode & S_IRGRP) ? 'r' : '-';
     str[5] = (mode & S_IWGRP) ? 'w' : '-';
 
-    if (mode & S_ISGID)
-        str[6] = (mode & S_IXGRP) ? 's' : 'S';
-    else
-        str[6] = (mode & S_IXGRP) ? 'x' : '-';
+    // Xu ly quyen SGID
+    if (mode & S_ISGID) str[6] = (mode & S_IXGRP) ? 's' : 'S';
+    else str[6] = (mode & S_IXGRP) ? 'x' : '-';
 
+    // Quyen doc va ghi cua nguoi dung khac
     str[7] = (mode & S_IROTH) ? 'r' : '-';
     str[8] = (mode & S_IWOTH) ? 'w' : '-';
 
-    if (mode & S_ISVTX)
-        str[9] = (mode & S_IXOTH) ? 't' : 'T';
-    else
-        str[9] = (mode & S_IXOTH) ? 'x' : '-';
+    // Xu ly quyen Sticky Bit
+    if (mode & S_ISVTX) str[9] = (mode & S_IXOTH) ? 't' : 'T';
+    else str[9] = (mode & S_IXOTH) ? 'x' : '-';
 
-    str[10] = '\0';
+    str[10] = '\0'; // Ket thuc chuoi
 }
 
-// Dinh dang kich thuoc file
-void format_size(const Entry *e, const Options *opts,
-                 char *buf, size_t size) {
+// Dinh dang kich thuoc file theo tuy chon
+void format_size(const Entry *e, const Options *opts, char *buf, size_t size) {
+    // Lay kich thuoc file theo byte
     double bytes = (double)e->st.st_size;
 
     if (opts->size_mode == SIZE_HUMAN) {
-        const char *units[] = {"B", "K", "M", "G", "T"};
-        int i = 0;
+        if (bytes < 1024) {
+            snprintf(buf, size, "%lldB", (long long)bytes);
+        } else {
+            // Danh sach don vi kich thuoc
+            const char *units[] = {"B", "K", "M", "G", "T"};
+            int i = 0;
 
-        while (bytes >= 1024 && i < 4) {
-            bytes /= 1024;
-            i++;
+            // Chia cho 1024 de chuyen sang don vi lon hon
+            while (bytes >= 1024 && i < 4) {
+                bytes /= 1024;
+                i++;
+            }
+            snprintf(buf, size, "%.1f%s", bytes, units[i]);
         }
-
-        snprintf(buf, size, "%.1f%s", bytes, units[i]);
-    } else if (opts->size_mode == SIZE_KIB) {
-        // Doi kich thuoc file sang KiB va lam tron len
-        snprintf(buf, size, "%lld",
-                 (long long)((e->st.st_size + 1023) / 1024));
     } else {
-        snprintf(buf, size, "%lld",
-                 (long long)e->st.st_size);
+        // Hien thi kich thuoc theo byte
+        snprintf(buf, size, "%lld", (long long)e->st.st_size);
     }
 }
 
-// Dinh dang thoi gian theo -c, -u hoac mac dinh
-void format_time(const Entry *e, const Options *opts,
-                 char *buf, size_t size) {
-    time_t t = e->st.st_mtime;
+// Tinh so block dung cho tuy chon -s va dong total
+long long get_entry_blocks(const Entry *e, const Options *opts) {
+    long long blocks = e->st.st_blocks; // So block da su dung, moi block 512 byte
 
-    if (opts->time_type == TIME_ATIME)
-        t = e->st.st_atime;
-    else if (opts->time_type == TIME_CTIME)
-        t = e->st.st_ctime;
+    if (opts->size_mode == SIZE_KIB) {
+        blocks = (blocks + 1) / 2; // Quy doi sang block 1024 byte
+    }
+    return blocks;
+}
 
+// Dinh dang thoi gian cua file
+void format_time(const Entry *e, const Options *opts, char *buf, size_t size) {
+    time_t t = e->st.st_mtime; // Mac dinh lay thoi gian sua doi
+
+    // Chon loai thoi gian theo tuy chon
+    if (opts->time_type == TIME_ATIME) t = e->st.st_atime;
+    else if (opts->time_type == TIME_CTIME) t = e->st.st_ctime;
+
+    // Chuyen timestamp thanh thoi gian doc duoc
     struct tm *tm_info = localtime(&t);
-
-    // Xu ly truong hop khong chuyen doi duoc thoi gian
-    if (tm_info == NULL ||
-        strftime(buf, size, "%b %e %H:%M", tm_info) == 0) {
+    if (tm_info == NULL) {
         snprintf(buf, size, "unknown");
+        return;
+    }
+
+    // File cu hon 6 thang hoac co thoi gian trong tuong lai thi hien thi nam
+    time_t now = time(NULL);
+    if (t > now || now - t > 182 * 86400) {
+        strftime(buf, size, "%b %e  %Y", tm_info);
+    } else {
+        // File moi hon thi hien thi gio va phut
+        strftime(buf, size, "%b %e %H:%M", tm_info);
     }
 }
-
-

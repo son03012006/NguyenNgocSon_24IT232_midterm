@@ -1,78 +1,127 @@
+#define _NETBSD_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/param.h>
 #include <pwd.h>
 #include <grp.h>
 #include <string.h>
+#include <ctype.h>
+#include <unistd.h>
 #include "print.h"
 #include "format.h"
 
-// In danh sach Entry
+// Khai bao ham tinh block tu format.c
+long long get_entry_blocks(const Entry *e, const Options *opts);
+
+// In ten file va xu ly cac ky tu khong in duoc
+static void print_filename(const char *name, const Options *opts) {
+    if (opts->char_mode == CHAR_PRINTABLE) {
+        for (int i = 0; name[i] != '\0'; i++) {
+            unsigned char c = name[i];
+            if (isprint(c)) {
+                putchar(c);
+            } else {
+                putchar('?');
+            }
+        }
+    } else {
+        printf("%s", name);
+    }
+}
+
+// In danh sach file theo cac tuy chon
 void print_entries(const EntryList *list, const Options *opts) {
     char mode_str[11];
     char size_str[32];
     char time_str[32];
 
+    // Tinh va in tong so block khi co -l hoac -s
+    if (opts->long_format || opts->show_blocks) {
+        long long total_blocks = 0;
+        for (size_t i = 0; i < list->count; i++) {
+            if (list->entries[i]->error == 0) {
+                total_blocks += get_entry_blocks(list->entries[i], opts);
+            }
+        }
+        printf("total %lld\n", total_blocks);
+    }
+
+    // Duyet va in tung entry trong danh sach
     for (size_t i = 0; i < list->count; i++) {
         Entry *e = list->entries[i];
 
-        // Bao loi neu khong lay duoc thong tin file
+        // Bo qua entry bi loi va hien thi thong bao
         if (e->error != 0) {
-            fprintf(stderr, "ls: %s: %s\n",
-                    e->path, strerror(e->error));
+            fprintf(stderr, "ls: %s: %s\n", e->path, strerror(e->error));
             continue;
         }
 
-        // Hien thi inode (-i)
+        // Hien thi inode khi co -i
         if (opts->show_inode) {
             printf("%llu ", (unsigned long long)e->st.st_ino);
         }
 
-        // Hien thi so block (-s)
+        // Hien thi so block khi co -s
         if (opts->show_blocks) {
-            printf("%lld ",
-                   (long long)((e->st.st_blocks + 1) / 2));
+            printf("%lld ", get_entry_blocks(e, opts));
         }
 
-        // In thong tin chi tiet (-l hoac -n)
+        // In thong tin chi tiet khi co -l hoac -n
         if (opts->long_format) {
             format_mode(e->st.st_mode, mode_str);
-            format_size(e, opts, size_str, sizeof(size_str));
-            format_time(e, opts, time_str, sizeof(time_str));
+            format_time(e, opts, time_str, sizeof(size_str));
 
+            // Lay ten nguoi dung va ten nhom tu UID, GID
             struct passwd *pw = getpwuid(e->st.st_uid);
             struct group *gr = getgrgid(e->st.st_gid);
 
-            printf("%s %2u ",
-                   mode_str, (unsigned int)e->st.st_nlink);
+            printf("%s %2u ", mode_str, (unsigned int)e->st.st_nlink);
 
-            if (opts->numeric_uid_gid || pw == NULL)
-                printf("%u ", (unsigned int)e->st.st_uid);
-            else
-                printf("%s ", pw->pw_name);
+            // In UID dang so hoac ten nguoi dung
+            if (opts->numeric_uid_gid || pw == NULL) printf("%u ", (unsigned int)e->st.st_uid);
+            else printf("%s ", pw->pw_name);
 
-            if (opts->numeric_uid_gid || gr == NULL)
-                printf("%u ", (unsigned int)e->st.st_gid);
-            else
-                printf("%s ", gr->gr_name);
+            // In GID dang so hoac ten nhom
+            if (opts->numeric_uid_gid || gr == NULL) printf("%u ", (unsigned int)e->st.st_gid);
+            else printf("%s ", gr->gr_name);
 
-            printf("%8s %s ", size_str, time_str);
+            // File thiet bi hien thi major, minor thay cho kich thuoc
+            if (S_ISCHR(e->st.st_mode) || S_ISBLK(e->st.st_mode)) {
+                printf("%3d, %3d ", (int)major(e->st.st_rdev), (int)minor(e->st.st_rdev));
+            } else {
+                format_size(e, opts, size_str, sizeof(size_str));
+                printf("%8s ", size_str);
+            }
+
+            printf("%s ", time_str);
         }
 
-        // In ten file va ky tu phan loai (-F)
-        printf("%s", e->name);
+        // In ten file theo che do ky tu da chon
+        print_filename(e->name, opts);
 
+        // Them ky tu phan loai file khi co -F
         if (opts->classify) {
             if (S_ISDIR(e->st.st_mode)) printf("/");
             else if (S_ISLNK(e->st.st_mode)) printf("@");
             else if (S_ISFIFO(e->st.st_mode)) printf("|");
             else if (S_ISSOCK(e->st.st_mode)) printf("=");
-            else if (e->st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH))
-                printf("*");
+            else if (e->st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) printf("*");
+        }
+
+        // Hien thi duong dan dich cua symbolic link khi co -l
+        if (opts->long_format && S_ISLNK(e->st.st_mode)) {
+            char linkbuf[1024];
+            ssize_t len = readlink(e->path, linkbuf, sizeof(linkbuf) - 1);
+            if (len != -1) {
+                linkbuf[len] = '\0';
+                printf(" -> %s", linkbuf);
+            }
         }
 
         printf("\n");
     }
 }
+

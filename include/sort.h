@@ -1,4 +1,4 @@
-#ifndef ORT_H
+#ifndef SORT_H
 #define SORT_H
 
 #include "list.h"

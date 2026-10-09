@@ -12,6 +12,7 @@ Entry *entry_create(const char *dirpath, const char *name) {
     Entry *e = xmalloc(sizeof(Entry));
     e->name = xstrdup(name);
     e->error = 0;
+    memset(&e->st, 0, sizeof(e->st));
 
     if (dirpath && dirpath[0] != '\0' &&
         strcmp(dirpath, ".") != 0) {
