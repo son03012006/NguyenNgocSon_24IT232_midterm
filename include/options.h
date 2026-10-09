@@ -1,24 +1,24 @@
 #ifndef OPTIONS_H
 #define OPTIONS_H
 
-// Quan ly loai thoi gian
+// Kieu thoi gian
 typedef enum {
-    TIME_MTIME, // Thoi gian sua doi
-    TIME_CTIME, // -c: Thoi gian thay doi trang thai
+    TIME_MTIME, // -t: Thoi gian sua doi
+    TIME_CTIME, // -c: Thoi gian thay doi
     TIME_ATIME  // -u: Thoi gian truy cap
 } TimeType;
 
-// Kieu hien thi kich thuoc
+// Kieu dung luong
 typedef enum {
-    SIZE_DEFAULT, // Mac dinh
-    SIZE_KIB,     // -k: Kilobyte
-    SIZE_HUMAN    // -h: De doc
+    SIZE_DEFAULT,
+    SIZE_KIB,   // -k: Dung luong KiB
+    SIZE_HUMAN  // -h: Dung luong de doc
 } SizeMode;
 
-// Cach in ky tu
+// Kieu hien thi ky tu
 typedef enum {
-    CHAR_PRINTABLE, // -q: Thay ky tu bang '?'
-    CHAR_RAW        // -w: In ky tu goc
+    CHAR_PRINTABLE, // -q
+    CHAR_RAW        // -w
 } CharMode;
 
 // Cac tuy chon cua lenh ls
@@ -37,12 +37,12 @@ typedef struct {
     int show_blocks;     // -s
     int sort_time;       // -t
 
-    TimeType time_type;
-    SizeMode size_mode;
-    CharMode char_mode;
+    TimeType time_type;  // -c, -u
+    SizeMode size_mode;  // -h, -k
+    CharMode char_mode;  // -q, -w
 } Options;
 
-// Khoi tao va phan tich tuy chon
+// Khoi tao va doc tuy chon
 void init_options(Options *opts);
 int parse_options(int argc, char *argv[], Options *opts);
 
