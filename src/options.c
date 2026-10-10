@@ -69,7 +69,7 @@ int parse_options(int argc, char *argv[], Options *opts) {
             // -l va -n ghi de nhau theo thu tu xuat hien
             case 'l':
                 opts->long_format = 1;
-                opts->numeric_uid_gid = 0;
+		opts->numeric_uid_gid = 0;
                 break;
             case 'n':
                 opts->long_format = 1;

@@ -1,4 +1,4 @@
-D_SOURCE
+#define _NETBSD_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
@@ -6,6 +6,9 @@ D_SOURCE
 #include <sys/types.h>
 #include <sys/param.h>
 #include <pwd.h>
+#include <locale.h>
+#include <wchar.h>
+#include <wctype.h>
 #include <grp.h>
 #include <string.h>
 #include <ctype.h>
@@ -13,23 +16,56 @@ D_SOURCE
 #include "print.h"
 #include "format.h"
 
-// Khai bao ham tinh block tu format.c
-long long get_entry_blocks(const Entry *e, const Options *opts);
-
-// In ten file va xu ly cac ky tu khong in duoc
+// In ten file va thay ky tu khong in duoc bang dau ?
 static void print_filename(const char *name, const Options *opts) {
-    if (opts->char_mode == CHAR_PRINTABLE) {
-        for (int i = 0; name[i] != '\0'; i++) {
-            unsigned char c = name[i];
-            if (isprint(c)) {
-                putchar(c);
-            } else {
-                putchar('?');
-            }
-        }
-    } else {
+    if (opts->char_mode != CHAR_PRINTABLE) {
         printf("%s", name);
+        return;
     }
+
+    mbstate_t state;
+    memset(&state, 0, sizeof(state));
+
+    const char *p = name;
+    size_t remaining = strlen(name);
+
+    while (remaining > 0) {
+        wchar_t wc;
+        size_t len = mbrtowc(&wc, p, remaining, &state);
+
+        if (len == (size_t)-1 || len == (size_t)-2) {
+            putchar('?');
+            p++;
+            remaining--;
+            memset(&state, 0, sizeof(state));
+        } else if (len == 0) {
+            break;
+        } else {
+            putwchar(iswprint(wc) ? wc : L'?');
+            p += len;
+            remaining -= len;
+        }
+    }
+}
+
+// In dong total cho mot danh sach
+static void print_total_line(const EntryList *list, const Options *opts) {
+    char total_str[32];
+    long long total_blocks = 0;
+
+    for (size_t i = 0; i < list->count; i++) {
+        if (list->entries[i]->error == 0) {
+            total_blocks += get_entry_blocks(list->entries[i], opts);
+        }
+    }
+
+    if (opts->size_mode == SIZE_HUMAN) {
+        format_human(total_blocks * 512, total_str, sizeof(total_str));
+    } else {
+        snprintf(total_str, sizeof(total_str), "%lld", total_blocks);
+    }
+
+    printf("total %s\n", total_str);
 }
 
 // In danh sach file theo cac tuy chon
@@ -37,18 +73,14 @@ void print_entries(const EntryList *list, const Options *opts, int print_total) 
     char mode_str[11];
     char size_str[32];
     char time_str[32];
+    char blk_str[32];
 
     // Chi in total cho -s khi dau ra la terminal; -l thi luon in
     int is_term = isatty(STDOUT_FILENO);
-	if (print_total && (opts->long_format || (opts->show_blocks && is_term))) {
-        	long long total_blocks = 0;
-        	for (size_t i = 0; i < list->count; i++) {
-            		if (list->entries[i]->error == 0) {
-                	total_blocks += get_entry_blocks(list->entries[i], opts);
-            	}
-        }
-        printf("total %lld\n", total_blocks);
+    if (print_total && (opts->long_format || (opts->show_blocks && is_term))) {
+        print_total_line(list, opts);
     }
+
     // Duyet va in tung entry trong danh sach
     for (size_t i = 0; i < list->count; i++) {
         Entry *e = list->entries[i];
@@ -64,15 +96,15 @@ void print_entries(const EntryList *list, const Options *opts, int print_total) 
             printf("%llu ", (unsigned long long)e->st.st_ino);
         }
 
-        // Hien thi so block khi co -s
+        // Hien thi so block (hoac kich thuoc de doc voi -h) khi co -s
         if (opts->show_blocks) {
-            printf("%lld ", get_entry_blocks(e, opts));
+            format_block_count(e, opts, blk_str, sizeof(blk_str));
+            printf("%s ", blk_str);
         }
 
         // In thong tin chi tiet khi co -l hoac -n
         if (opts->long_format) {
             format_mode(e->st.st_mode, mode_str);
-            // Sua typo: dung sizeof(time_str) thay vi sizeof(size_str)
             format_time(e, opts, time_str, sizeof(time_str));
 
             // Lay ten nguoi dung va ten nhom tu UID, GID
@@ -109,7 +141,7 @@ void print_entries(const EntryList *list, const Options *opts, int print_total) 
             else if (S_ISLNK(e->st.st_mode)) printf("@");
             else if (S_ISFIFO(e->st.st_mode)) printf("|");
             else if (S_ISSOCK(e->st.st_mode)) printf("=");
-            else if (S_ISWHT(e->st.st_mode)) printf("%%"); // Whiteout (BSD)
+            else if (S_ISWHT(e->st.st_mode)) printf("%%");
             else if (e->st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) printf("*");
         }
 

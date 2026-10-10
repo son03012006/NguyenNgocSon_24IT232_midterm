@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <locale.h>
 #include <sys/stat.h>
 #include "options.h"
 #include "entry.h"
@@ -64,6 +65,7 @@ static int process_directory(const char *dirpath, const Options *opts,
 }
 
 int main(int argc, char *argv[]) {
+    setlocale(LC_CTYPE, "");
     Options opts;
     int arg_idx = parse_options(argc, argv, &opts);
 
@@ -83,6 +85,7 @@ int main(int argc, char *argv[]) {
         num_operands = 1;
     }
 
+    // Khai bao truoc vong lap de ca ham deu dung duoc
     EntryList file_list, dir_list;
     list_init(&file_list);
     list_init(&dir_list);
@@ -92,7 +95,15 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < num_operands; i++) {
         const char *path = operands[i];
         struct stat st;
-        int stat_res = opts.dir_as_file ? lstat(path, &st) : stat(path, &st);
+
+        // Chi di theo symlink o operand khi khong co -d, -l, -F
+        int follow = !(opts.dir_as_file || opts.long_format || opts.classify);
+        int stat_res = follow ? stat(path, &st) : lstat(path, &st);
+
+        // Symlink hong: in chinh symlink thay vi bao loi
+        if (stat_res == -1 && follow) {
+            stat_res = lstat(path, &st);
+        }
 
         if (stat_res == -1) {
             fprintf(stderr, "ls: %s: %s\n", path, strerror(errno));

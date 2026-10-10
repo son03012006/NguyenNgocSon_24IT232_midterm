@@ -2,7 +2,8 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
-#include <stdlib.h> 
+#include <stdlib.h>
+#include <stdint.h>
 #include <time.h>
 #include <sys/stat.h>
 #include "format.h"
@@ -16,9 +17,7 @@ void format_mode(mode_t mode, char *str) {
     else if (S_ISBLK(mode)) str[0] = 'b';
     else if (S_ISFIFO(mode)) str[0] = 'p';
     else if (S_ISSOCK(mode)) str[0] = 's';
-#ifdef S_ISWHT
-    else if (S_ISWHT(mode)) str[0] = 'w'; 
-#endif
+    else if (S_ISWHT(mode)) str[0] = 'w';
     else str[0] = '-';
 
     // Quyen doc va ghi cua chu so huu
@@ -48,48 +47,63 @@ void format_mode(mode_t mode, char *str) {
     str[10] = '\0'; // Ket thuc chuoi
 }
 
-// Dinh dang kich thuoc file theo tuy chon
-void format_size(const Entry *e, const Options *opts, char *buf, size_t size) {
-    // Lay kich thuoc file theo byte
-    double bytes = (double)e->st.st_size;
 
-    if (opts->size_mode == SIZE_HUMAN) {
-        if (bytes < 1024) {
-            snprintf(buf, size, "%lldB", (long long)bytes);
-        } else {
-            // Danh sach don vi kich thuoc
-            const char *units[] = {"B", "K", "M", "G", "T"};
-            int i = 0;
+// Doi byte sang dang de doc 
+void format_human(long long bytes, char *buf, size_t size) {
+    const char *suffix[] = {"", "K", "M", "G", "T", "P", "E"};
+    double value = (double)bytes;
+    int unit = 0;
 
-            // Chia cho 1024 de chuyen sang don vi lon hon
-            while (bytes >= 1024 && i < 4) {
-                bytes /= 1024;
-                i++;
-            }
-            snprintf(buf, size, "%.1f%s", bytes, units[i]);
-        }
+    while (value >= 1024.0 && unit < 6) {
+        value /= 1024.0;
+        unit++;
+    }
+
+    if (unit == 0) {
+        snprintf(buf, size, "%lld", bytes);
+    } else if (value >= 10.0) {
+        snprintf(buf, size, "%.0f%s", value, suffix[unit]);
     } else {
-        // Hien thi kich thuoc theo byte
+        snprintf(buf, size, "%.1f%s", value, suffix[unit]);
+    }
+}
+
+// Dinh dang kich thuoc file cho cot size cua -l
+void format_size(const Entry *e, const Options *opts, char *buf, size_t size) {
+    if (opts->size_mode == SIZE_HUMAN) {
+        format_human((long long)e->st.st_size, buf, size);
+    } else {
         snprintf(buf, size, "%lld", (long long)e->st.st_size);
     }
 }
 
-// Tinh so block dung cho tuy chon -s va dong total
+// Tinh so block cho -s va dong total (lam tron len)
+// Don vi: 512 byte mac dinh, 1024 neu co -k, hoac BLOCKSIZE
 long long get_entry_blocks(const Entry *e, const Options *opts) {
-    long long blocks = e->st.st_blocks; // So block da su dung, moi block 512 byte
+    long long bytes = (long long)e->st.st_blocks * 512;
+    long long unit = 512;
 
     if (opts->size_mode == SIZE_KIB) {
-        return (blocks + 1) / 2; // Quy doi sang block 1024 byte
+        unit = 1024;
     } else if (opts->size_mode == SIZE_DEFAULT) {
-        char *env_bs = getenv("BLOCKSIZE"); 
-        if (env_bs) {
-            long long bs = atoll(env_bs);
-            if (bs > 0) {
-                return ((blocks * 512) + bs - 1) / bs;
-            }
-        }
+        int headerlen;
+        long bs;
+        (void)getbsize(&headerlen, &bs); // doc bien moi truong BLOCKSIZE
+        if (bs > 0) unit = bs;
     }
-    return blocks;
+
+    return (bytes + unit - 1) / unit;
+}
+
+// Dinh dang so block cho tuy chon -s
+void format_block_count(const Entry *e, const Options *opts,
+                        char *buf, size_t size) {
+	if (opts->size_mode == SIZE_HUMAN) {
+    		long long bytes = (long long)e->st.st_blocks * 512;
+    		format_human(bytes, buf, size);
+	} else {
+    		snprintf(buf, size, "%lld", get_entry_blocks(e, opts));
+	}
 }
 
 // Dinh dang thoi gian cua file
