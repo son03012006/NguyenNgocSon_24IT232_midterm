@@ -1,4 +1,4 @@
-#define _NETBSD_SOURCE
+D_SOURCE
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
@@ -33,22 +33,22 @@ static void print_filename(const char *name, const Options *opts) {
 }
 
 // In danh sach file theo cac tuy chon
-void print_entries(const EntryList *list, const Options *opts) {
+void print_entries(const EntryList *list, const Options *opts, int print_total) {
     char mode_str[11];
     char size_str[32];
     char time_str[32];
 
-    // Tinh va in tong so block khi co -l hoac -s
-    if (opts->long_format || opts->show_blocks) {
-        long long total_blocks = 0;
-        for (size_t i = 0; i < list->count; i++) {
-            if (list->entries[i]->error == 0) {
-                total_blocks += get_entry_blocks(list->entries[i], opts);
-            }
+    // Chi in total cho -s khi dau ra la terminal; -l thi luon in
+    int is_term = isatty(STDOUT_FILENO);
+	if (print_total && (opts->long_format || (opts->show_blocks && is_term))) {
+        	long long total_blocks = 0;
+        	for (size_t i = 0; i < list->count; i++) {
+            		if (list->entries[i]->error == 0) {
+                	total_blocks += get_entry_blocks(list->entries[i], opts);
+            	}
         }
         printf("total %lld\n", total_blocks);
     }
-
     // Duyet va in tung entry trong danh sach
     for (size_t i = 0; i < list->count; i++) {
         Entry *e = list->entries[i];
@@ -72,7 +72,8 @@ void print_entries(const EntryList *list, const Options *opts) {
         // In thong tin chi tiet khi co -l hoac -n
         if (opts->long_format) {
             format_mode(e->st.st_mode, mode_str);
-            format_time(e, opts, time_str, sizeof(size_str));
+            // Sua typo: dung sizeof(time_str) thay vi sizeof(size_str)
+            format_time(e, opts, time_str, sizeof(time_str));
 
             // Lay ten nguoi dung va ten nhom tu UID, GID
             struct passwd *pw = getpwuid(e->st.st_uid);
@@ -108,6 +109,7 @@ void print_entries(const EntryList *list, const Options *opts) {
             else if (S_ISLNK(e->st.st_mode)) printf("@");
             else if (S_ISFIFO(e->st.st_mode)) printf("|");
             else if (S_ISSOCK(e->st.st_mode)) printf("=");
+            else if (S_ISWHT(e->st.st_mode)) printf("%%"); // Whiteout (BSD)
             else if (e->st.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) printf("*");
         }
 
@@ -124,4 +126,3 @@ void print_entries(const EntryList *list, const Options *opts) {
         printf("\n");
     }
 }
-

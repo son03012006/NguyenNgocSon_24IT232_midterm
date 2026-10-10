@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
+#include <stdlib.h> 
 #include <time.h>
 #include <sys/stat.h>
 #include "format.h"
@@ -15,6 +16,9 @@ void format_mode(mode_t mode, char *str) {
     else if (S_ISBLK(mode)) str[0] = 'b';
     else if (S_ISFIFO(mode)) str[0] = 'p';
     else if (S_ISSOCK(mode)) str[0] = 's';
+#ifdef S_ISWHT
+    else if (S_ISWHT(mode)) str[0] = 'w'; 
+#endif
     else str[0] = '-';
 
     // Quyen doc va ghi cua chu so huu
@@ -75,7 +79,15 @@ long long get_entry_blocks(const Entry *e, const Options *opts) {
     long long blocks = e->st.st_blocks; // So block da su dung, moi block 512 byte
 
     if (opts->size_mode == SIZE_KIB) {
-        blocks = (blocks + 1) / 2; // Quy doi sang block 1024 byte
+        return (blocks + 1) / 2; // Quy doi sang block 1024 byte
+    } else if (opts->size_mode == SIZE_DEFAULT) {
+        char *env_bs = getenv("BLOCKSIZE"); 
+        if (env_bs) {
+            long long bs = atoll(env_bs);
+            if (bs > 0) {
+                return ((blocks * 512) + bs - 1) / bs;
+            }
+        }
     }
     return blocks;
 }

@@ -1,5 +1,5 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -Iinclude -std=c99 -MMD -MP
+CC = cc
+CFLAGS = -Wall -Wextra -Werror -Iinclude -std=c99 -MMD -MP
 SRCS = src/entry.c src/options.c src/list.c src/utils.c src/sort.c src/format.c src/print.c src/main.c
 OBJS = $(SRCS:.c=.o)
 DEPS = $(OBJS:.o=.d)
